@@ -278,7 +278,8 @@ def prepare_nft_validator_data(validator_address, contract_address, selected_cid
     }
 
 # Mint Certificate Validator
-def mint_cert_validator(request, validator_address):
+@api_view(['POST'])
+def mint_cert_validator(request):
     mint_headers = {
         'client_id': f'{API_KEY}',
         'client_secret': f'{API_PASSWORD}'
@@ -286,6 +287,9 @@ def mint_cert_validator(request, validator_address):
 
     API_URL = f'{BASE_API_URL}/mint-certificate'
     CALLBACK_URL = 'https://127.0.0.1:8000/'
+
+    data = request.data
+    validator_address = data.get('validator_address')
 
     try:
         # Validate input
@@ -397,26 +401,58 @@ def get_validator_cert(request, validator_address):
         return JsonResponse({'status': 'error', 'message': f'Unexpected error occurred: {e}'}, status=500)
 
 # When project research is published, store project's details & mint NFT for the researcher
-def publish_research(request, researcher_address, project_name, project_description, funding_amount):
-    # Store project details
-    project = Project(project_name=project_name, project_description=project_description, funded_amount=funding_amount, pub_date=datetime.now(), user_address=researcher_address)
-    project.save()
+@api_view(['POST'])
+def publish_research(request):
 
-    # Store the votePoll for the project
-    votePoll = Vote(project=project, vote_result=0)
-    votePoll.save()
+    try:
+        data_received = request.data
 
-    # Mint NFT for the researcher
-    mint_cert_owner(request, researcher_address, project_name, project_description)
+        researcher_address = data_received.get('researcher_address')
+        project_name = data_received.get('project_name')
+        project_description = data_received.get('project_description')
+        funding_amount = data_received.get('funding_amount')
 
-    # Retrieve all vote histories for this project
-    vote_histories = vote_history.objects.filter(project=project)
+        logger.info(f"Researcher Address: {researcher_address}")
+        logger.info(f"Project Name: {project_name}")
+        logger.info(f"Project Description: {project_description}")
+        logger.info(f"Funding Amount: {funding_amount}")
 
-    # Update the reputation score for each validator who voted for this project
-    for vote in vote_histories:
-        if vote.vote.vote_result == 1:
-            Validator.objects.filter(validator_address=vote.validator_address).update(
-                reputation_score=F('reputation_score') + 1
-            )
+        # Validate post data from the request
+        if not researcher_address or not project_name or not project_description or not funding_amount:
+            return JsonResponse({'status': 'error', 'message': 'Missing required fields'}, status=400)
+
+        # # Store project details
+        # project = Project(project_name=project_name, project_description=project_description, funded_amount=funding_amount, pub_date=datetime.now(), user_address=researcher_address)
+        # project.save()
+
+        # # Store the votePoll for the project
+        # votePoll = Vote(project=project, vote_result=0)
+        # votePoll.save()
+
+        # # Mint NFT for the researcher
+        # mint_cert_owner(request, researcher_address, project_name, project_description)
+
+        # # Retrieve all vote histories for this project
+        # vote_histories = vote_history.objects.filter(project=project)
+
+        # # Update the reputation score for each validator who voted for this project
+        # for vote in vote_histories:
+        #     if vote.vote.vote_result == 1:
+        #         Validator.objects.filter(validator_address=vote.validator_address).update(
+        #             reputation_score=F('reputation_score') + 1
+        #         )
+        
+        return JsonResponse({'status': 'success', 'message': 'Research published successfully'})
     
-    return JsonResponse({'status': 'success', 'message': 'Research published successfully'})
+    except requests.exceptions.ConnectionError as conn_err:
+        logger.error(f"Connection error occurred: {conn_err}")
+        return JsonResponse({'status': 'error', 'message': f'Connection error occurred: {conn_err}'}, status=500)
+    except requests.exceptions.Timeout as timeout_err:
+        logger.error(f"Timeout error occurred: {timeout_err}")
+        return JsonResponse({'status': 'error', 'message': f'Timeout error occurred: {timeout_err}'}, status=500)
+    except requests.exceptions.RequestException as req_err:
+        logger.error(f"An error occurred: {req_err}")
+        return JsonResponse({'status': 'error', 'message': f'An error occurred: {req_err}'}, status=500)
+    except Exception as e:
+        logger.error(f"Unexpected error occurred: {e}")
+        return JsonResponse({'status': 'error', 'message': f'Unexpected error occurred: {e}'}, status=500)
