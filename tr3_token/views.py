@@ -21,8 +21,13 @@ API_KEY = 'd64bc76a62cab22df165372c5db4633a1911dd813a6f98df3d893c502cefbcf5'
 API_PASSWORD = 'sk_dbe0530ab6011d5adac455fb7022b98363543299257975f61592ce27b398e357'
 BASE_API_URL = 'https://service-testnet.maschain.com/api/token'
 
+CALLBACK_URL = 'https://127.0.0.1:8000/'
+
 # Contract Address
 CONTRACT_ADDRESS = '0xd06e130A7ff3f4C335B072DF184D310BcCDdFddF'
+
+# Organization Wallet Address
+ORGANISATION_WALLET_ADDRESS = '0xDffbE93AE00d7172438057DfAF435B79AFE0C16a'
 
 # Headers Credentials For Maschain API
 headers = {
@@ -41,13 +46,25 @@ def test_api_token_conn(request):
 
 # Mint Token
 @api_view(['POST'])
-def mint_token(request):
+def topUp_token(request):
     API_URL = f'{BASE_API_URL}/mint'
 
     try:
         # Get data from the request body
-        data = request.data
-        logger.debug(f"Request Data: {data}")
+        data_received = request.data
+
+        if not data_received.get('wallet_address') or not data_received.get('amount'):
+            return JsonResponse({'status': 'error', 'message': 'Missing required fields'})
+        
+        data = {
+                    "wallet_address":f'{ORGANISATION_WALLET_ADDRESS}',
+                    "to": f'{data_received["wallet_address"]}',
+                    "contract_address":f'{CONTRACT_ADDRESS}',
+                    "amount":f'{data_received["amount"]}',
+                    "callback_url": f'{CALLBACK_URL}'
+                }
+        
+        # logger.debug(f"Request Data: {data}")
         
         # Make the POST request to the external API with the data
         response = requests.post(API_URL, headers=headers, json=data)
@@ -215,7 +232,18 @@ def check_balance_api(request):
     API_URL = f'{BASE_API_URL}/balance'
 
     try:
-        data = request.data
+        data_received = request.data
+
+        # Check request data is valid
+        if not data_received.get('wallet_address'):
+            return JsonResponse({'status': 'error', 'message': 'Missing required fields'})
+
+         # Get data from the request body
+        data = {
+                    "wallet_address":f'{data_received["wallet_address"]}',
+                    "contract_address":f'{CONTRACT_ADDRESS}'
+                }
+
         logger.debug(f"Request Data: {data}")
         
         # Make the POST request to the external API with the data
