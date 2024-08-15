@@ -1,11 +1,26 @@
 from django.shortcuts import render
 from django.http import JsonResponse
-from .models import Project, Vote, vote_history
+from .models import Project, Vote, vote_history, Validator
 from datetime import datetime
+from rest_framework.decorators import api_view
 
 # Vote for project
-def vote_project(request, project_id, validator_addrs, vote_choice):
+@api_view(['POST'])
+def vote_project(request):
     try:
+        data = request.data
+        project_id = data.get('project_id')
+        validator_addrs = data.get('validator_address')
+        vote_choice = data.get('vote_choice')
+
+        # Check if all required fields are present
+        if not project_id or not validator_addrs or not vote_choice:
+            return JsonResponse({'status': 'error', 'message': 'Missing required fields'})
+        
+        # Validate validator's address is valid
+        if not Validator.objects.filter(validator_address=validator_addrs).exists():
+            return JsonResponse({'status': 'error', 'message': 'Validator not found'})
+        
         # Get the project
         project = Project.objects.get(pk=project_id)
 
@@ -28,6 +43,8 @@ def vote_project(request, project_id, validator_addrs, vote_choice):
             vote.total_no += 1
             bridging_vote = 2
         
+        vote.total_votes += 1
+        
         # Save the updated vote counts
         vote.save()
 
@@ -48,3 +65,35 @@ def vote_project(request, project_id, validator_addrs, vote_choice):
         return JsonResponse({'status': 'error', 'message': 'Vote not found for the project'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
+
+# Get projects scoped by researcher
+@api_view(['GET'])
+def get_projects(request, reseacher_address):
+    projects = Project.objects.filter(user_address=reseacher_address)
+    data = []
+    for project in projects:
+        data.append({
+            'id': project.id,
+            'project_name': project.project_name,
+            'project_description': project.project_description,
+            'funded_amount': project.funded_amount,
+            'pub_date': project.pub_date,
+            'user_address': project.user_address
+        })
+    return JsonResponse({'status': 'success', 'data': data})
+
+# Get all projects
+@api_view(['GET'])
+def get_all_projects(request):
+    projects = Project.objects.all()
+    data = []
+    for project in projects:
+        data.append({
+            'id': project.id,
+            'project_name': project.project_name,
+            'project_description': project.project_description,
+            'funded_amount': project.funded_amount,
+            'pub_date': project.pub_date,
+            'user_address': project.user_address
+        })
+    return JsonResponse({'status': 'success', 'data': data})
