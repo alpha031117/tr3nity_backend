@@ -21,6 +21,7 @@ urlpatterns = [
     path('tr3nity_token/', include('tr3_token.urls')),
     path('tr3nity_wallet/', include('tr3_wallet.urls')),
     path('tr3nity_certificate/', include('tr3_certificate.urls')),
-    path('tr3nity_project/', include('vote.urls')),
+    path('tr3nity_project/', include('vote_project.urls')),
+    path('tr3nity_grants/', include('grants_project.urls')),
     path('admin/', admin.site.urls),
 ]

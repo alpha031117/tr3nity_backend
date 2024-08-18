@@ -2,6 +2,7 @@ import requests
 from django.http import JsonResponse
 from rest_framework.decorators import api_view
 import logging
+from tr3_certificate.views import mint_cert_owner
 
 # logger configuration
 logging.basicConfig(

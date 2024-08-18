@@ -43,3 +43,18 @@ def get_random_cid(available_cids, used_cids):
         raise Exception("No available CIDs left.")
     
     return random.choice(available)
+
+# # Upload file to IPFS
+def upload_to_ipfs(file):
+    try:
+        client = ipfshttpclient.connect('/ip4/127.0.0.1/tcp/5001/http')  # Connect to local IPFS node
+        try:
+            result = client.add(file)  # Upload the file
+            return result['Hash']  # Return the IPFS hash
+        except Exception as e:
+            print(f"Error adding file to IPFS: {e}")
+            raise
+    except Exception as e:
+        print(f"Error connecting to IPFS client: {e}")
+    finally:
+        client.close()  # Always close the client connection

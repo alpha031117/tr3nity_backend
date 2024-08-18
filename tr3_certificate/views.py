@@ -5,13 +5,14 @@ from rest_framework.decorators import api_view
 import logging
 from utils import convert_to_readable_timestamp, get_random_cid, get_file_from_ipfs
 from datetime import datetime
-from vote.models import Project, Validator, vote_history, Vote
+from vote_project.models import Validator, Vote, vote_history
+from grants_project.models import Project, Grant
 from django.db.models import F
+
 
 # This would be your database or persistent storage in a real application.
 used_cids = set()  # A set of already used CIDs.
-# available_cids = ['QmefZjiMi2gpunqjS7nxa8BZopFNfZwSBJFcZCQR5m8duK', 'QmXZQZBV7KF3Rfv8zhvzLH2fZ1tcB7iQsLubAEiFpE3YXz']  # List of all possible CIDs.
-available_cids = ['QmefZjiMi2gpunqjS7nxa8BZopFNfZwSBJFcZCQR5m8duK'] 
+available_cids = ['QmUwivpSjVnzDaMEUZ47tHhmZbeao3eZQFqt2nKf5QzyaH', 'QmVWv7qDQTVeU5epzhVxBk29sAhqvw95WUJoCtVhQvnqcX', 'QmZTc14zx1ZU2potKcvq1hRdRdkn2m8NLtREBEg4zUyn5K']  # List of all possible CIDs.
 
 # logger configuration
 logging.basicConfig(
@@ -32,9 +33,12 @@ BASE_API_URL = 'https://service-testnet.maschain.com/api/certificate'
 
 WALLET_ADDRESS_OWNER_ADMIN = '0x0561BA623dB25aEfBb61882d5E0f95e3412117A6'
 WALLET_ADDRESS_VALIDATOR_ADMIN = '0x5305915244C582626dF29f7c61049D39c0B8B382'
+WALLET_ADDRESS_RESERCHER_ADMIN = '0x3003E934783dD85d40c2cf76d274c689dF5975F6'
+WALLET_ADDRESS_OWNER_ADMIN_1 = '0x5b3a8eCB9677F56e46d67B7e69900cE322c030d1'
 
 OWNER_CONTRACT_ADDRESS = '0xFa3D1712858bd8a4451ff6dD4948236123BE6664'
 GORV_CONTRACT_ADDRESS = '0xBB165A89B8bB2C21cC433100180AbBEC5f614035'
+PDF_CONTRACT_ADDRESS = '0x161895f32A8eA73433162192819c2e36113AB4ae'
 
 # Headers Credentials For Maschain API
 headers = {
@@ -400,48 +404,186 @@ def get_validator_cert(request, validator_address):
         logger.error(f"Unexpected error occurred: {e}")
         return JsonResponse({'status': 'error', 'message': f'Unexpected error occurred: {e}'}, status=500)
 
-# When project research is published, store project's details & mint NFT for the researcher
-@api_view(['POST'])
-def publish_research(request):
+# Function to fetch token ID
+def fetch_pdf_url_from_response(response, token_id_to_find):
+    try:
+        response_data = response.json()  # Parse the JSON response into a Python dictionary
 
+        # Check if response_data is a dictionary and has the key 'result'
+        if isinstance(response_data, dict) and 'result' in response_data:
+            result_list = response_data['result']
+
+            # Ensure 'result' is a list
+            if isinstance(result_list, list):
+                # Iterate over the list to find the matching nft_token_id
+                for item in result_list:
+                    if isinstance(item, dict) and item.get('nft_token_id') == int(token_id_to_find):
+                        return item['certificate_image_file']
+                
+                print(f"Error: No matching 'nft_token_id' found in the result list")
+            else:
+                print("Error: 'result' is not a list")
+        else:
+            print("Error: Response data is not in the expected format")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {e}")
+    except ValueError as e:
+        print(f"Error parsing JSON: {e}")
+    
+    return None
+
+# Get List of PDF Reseacher
+@api_view(['GET'])
+def get_pdf_researcher(request, researcher_address, tokenID):
+    """
+    Fetch the list of certificate from the external API.
+    
+    Returns:
+        JsonResponse: A JSON response with the status and data or error message.
+    """
+
+    tx_id = ""
+    status = ""
+    
+    API_URL = f'{BASE_API_URL}/get-certificate?from={WALLET_ADDRESS_RESERCHER_ADMIN}&to={researcher_address}&contract_address={PDF_CONTRACT_ADDRESS}&transaction_id={tx_id}&status={status}'
+
+    try:
+        # Make the GET request to the external API
+        response = requests.get(API_URL, headers=headers)
+        response.raise_for_status()  # Raises an HTTPError for bad responses (4xx and 5xx)
+        
+        if response.status_code == 200:
+            # Retrieve only the matched tokenID
+            matched_data = fetch_pdf_url_from_response(response, tokenID)
+            logger.info(f"Response Data: {matched_data}")
+            return JsonResponse({'status': 'success', 'data': matched_data})
+        else:
+            return JsonResponse({'status': 'error', 'message': response.text}, status=response.status_code)
+
+    except requests.exceptions.HTTPError as http_err:
+        logger.error(f"HTTP error occurred: {http_err} - {response.status_code} - {response.text}")
+        return JsonResponse({'status': 'error', 'message': f'HTTP error occurred: {http_err}'}, status=500)
+    except requests.exceptions.ConnectionError as conn_err:
+        logger.error(f"Connection error occurred: {conn_err}")
+        return JsonResponse({'status': 'error', 'message': f'Connection error occurred: {conn_err}'}, status=500)
+    except requests.exceptions.Timeout as timeout_err:
+        logger.error(f"Timeout error occurred: {timeout_err}")
+        return JsonResponse({'status': 'error', 'message': f'Timeout error occurred: {timeout_err}'}, status=500)
+    except requests.exceptions.RequestException as req_err:
+        logger.error(f"An error occurred: {req_err}")
+        return JsonResponse({'status': 'error', 'message': f'An error occurred: {req_err}'}, status=500)
+    except Exception as e:
+        logger.error(f"Unexpected error occurred: {e}")
+        return JsonResponse({'status': 'error', 'message': f'Unexpected error occurred: {e}'}, status=500)
+
+# Upload Research
+@api_view(['POST'])
+def upload_research(request):
     try:
         data_received = request.data
 
+        required_fields = [
+            'grant', 'researcher_address', 'project_name', 'project_description', 
+            'start_date', 'end_date', 'team_members', 'upload_file'
+        ]
+
+        # Check for missing fields
+        missing_fields = [field for field in required_fields if not data_received.get(field)]
+        if missing_fields:
+            return JsonResponse({
+                'status': 'error', 
+                'message': f'Missing required fields: {", ".join(missing_fields)}'
+            }, status=400)
+
+        grant_id = data_received.get('grant')
         researcher_address = data_received.get('researcher_address')
         project_name = data_received.get('project_name')
         project_description = data_received.get('project_description')
-        funding_amount = data_received.get('funding_amount')
+        start_date = data_received.get('start_date')
+        end_date = data_received.get('end_date')
+        team_members = data_received.get('team_members')
+        upload_file = request.FILES.get('upload_file')
+        aim = data_received.get('aim')
+        timeline = data_received.get('timeline')
 
+        if not upload_file:
+            return JsonResponse({'status': 'error', 'message': 'No file uploaded'}, status=400)
+
+        pdf_upload_token = upload_nft_pdf(upload_file, researcher_address, project_name, project_description)
+
+        if not pdf_upload_token:
+            return JsonResponse({'status': 'error', 'message': 'Error uploading the file to Chain'}, status=500)
+        
+        logger.info(f"Grant: {grant_id}")
         logger.info(f"Researcher Address: {researcher_address}")
         logger.info(f"Project Name: {project_name}")
         logger.info(f"Project Description: {project_description}")
-        logger.info(f"Funding Amount: {funding_amount}")
+        logger.info(f"Start Date: {start_date}")
+        logger.info(f"End Date: {end_date}")
+        logger.info(f"Team Members: {team_members}")
+        logger.info(f"Upload File Token ID: {pdf_upload_token}")
 
-        # Validate post data from the request
-        if not researcher_address or not project_name or not project_description or not funding_amount:
-            return JsonResponse({'status': 'error', 'message': 'Missing required fields'}, status=400)
+        grant = Grant.objects.get(pk=grant_id)
 
-        # # Store project details
-        # project = Project(project_name=project_name, project_description=project_description, funded_amount=funding_amount, pub_date=datetime.now(), user_address=researcher_address)
-        # project.save()
+        # Store project details
+        project = Project(
+            grant=grant,
+            name=project_name,
+            description=project_description,
+            aim=aim,
+            timeline=timeline,
+            start_time=start_date,
+            end_time=end_date,
+            team_members=team_members,
+            pdf_uploaded=pdf_upload_token,
+            created_by=researcher_address
+        )
 
-        # # Store the votePoll for the project
-        # votePoll = Vote(project=project, vote_result=0)
-        # votePoll.save()
+        project.save()
 
-        # # Mint NFT for the researcher
-        # mint_cert_owner(request, researcher_address, project_name, project_description)
+        # Store the votePoll for the project
+        votePoll = Vote(project=project)
+        votePoll.save()
 
-        # # Retrieve all vote histories for this project
-        # vote_histories = vote_history.objects.filter(project=project)
+        return JsonResponse({'status': 'success', 'message': 'Research uploaded successfully'})
 
-        # # Update the reputation score for each validator who voted for this project
-        # for vote in vote_histories:
-        #     if vote.vote.vote_result == 1:
-        #         Validator.objects.filter(validator_address=vote.validator_address).update(
-        #             reputation_score=F('reputation_score') + 1
-        #         )
+    except Exception as e:
+        logger.error(f"Error uploading research: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': 'An error occurred while uploading the research'}, status=500)
+
+# When project research is published, store project's details & mint NFT for the researcher
+def publish_research(request, project_id):
+
+    try:
+        # Update project's status to published
+        project = Project.objects.get(pk=project_id)
+
+        if project.status == 'published':
+            return JsonResponse({'status': 'error', 'message': 'Research has already been published'}, status=400)
         
+        if not project:
+            return JsonResponse({'status': 'error', 'message': 'Project not found'}, status=404)
+
+        researcher_address = project.created_by
+        project_name = project.name
+        project_description = project.description
+
+        # Mint NFT for the researcher
+        mint_cert_owner(request, researcher_address, project_name, project_description)
+
+        # Retrieve all vote histories for this project
+        vote_histories = vote_history.objects.filter(project=project)
+
+        # Update the reputation score for each validator who voted for this project
+        for vote in vote_histories:
+            if vote.vote.vote_result == 1:
+                Validator.objects.filter(validator_address=vote.validator_address).update(
+                    reputation_score=F('reputation_score') + 1
+                )
+        
+        project.status = 'published'
+        project.save()
         return JsonResponse({'status': 'success', 'message': 'Research published successfully'})
     
     except requests.exceptions.ConnectionError as conn_err:
@@ -456,3 +598,54 @@ def publish_research(request):
     except Exception as e:
         logger.error(f"Unexpected error occurred: {e}")
         return JsonResponse({'status': 'error', 'message': f'Unexpected error occurred: {e}'}, status=500)
+
+# Add pdf into chain
+def upload_nft_pdf(file, reseacher_address, project_name, project_description):
+    
+    mint_headers = {
+        'client_id': f'{API_KEY}',
+        'client_secret': f'{API_PASSWORD}'
+    }
+
+    API_URL = f'{BASE_API_URL}/mint-certificate'
+    CALLBACK_URL = 'https://127.0.0.1:8000/'
+
+    data = {
+        'wallet_address': WALLET_ADDRESS_RESERCHER_ADMIN,
+        'to': reseacher_address,
+        'contract_address': PDF_CONTRACT_ADDRESS,
+        'file': (f"{project_name}-proposal.pdf", file),
+        'attributes': json.dumps([
+            {"trait": "Project Description", "value": project_description}
+        ]),
+        'name': "PDF NFT Certificate",
+        'description': f"Proposal {project_name} NFT",
+        'callback_url': CALLBACK_URL
+    }
+    
+    # Send POST request to mint the NFT
+    response = requests.post(
+        API_URL,
+        headers=mint_headers,
+        data={
+            'wallet_address': data['wallet_address'],
+            'to': data['to'],
+            'contract_address': data['contract_address'],
+            'attributes': data['attributes'],
+            'name': data['name'],
+            'description': data['description'],
+            'callback_url': data['callback_url']
+        },
+        files={'file': data['file']}
+    )
+    
+    # Log response status and content
+    logger.info(f"Response Status Code: {response.status_code}")
+    logger.info(f"Response Text: {response.text}")
+
+    response_json = response.json()
+    result = response_json.get('result', {})
+    nft_token_id = result.get('nft_token_id')
+
+
+    return nft_token_id

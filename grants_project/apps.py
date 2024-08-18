@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class VoteConfig(AppConfig):
+class GrantsProjectConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "vote"
+    name = "grants_project"

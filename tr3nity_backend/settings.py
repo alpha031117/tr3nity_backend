@@ -42,7 +42,8 @@ INSTALLED_APPS = [
     'tr3_certificate',
     'tr3_token',
     'tr3_wallet',
-    'vote',
+    'grants_project',
+    'vote_project',
     'utils',
 ]
 
@@ -56,11 +57,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-
-DEFAULT_FILE_STORAGE = 'django_ipfs.storage.InterPlanetaryFileSystemStorage'
-
-IPFS_STORAGE_API_URL = 'http://localhost:5002/api/v0/'
-IPFS_STORAGE_GATEWAY_URL = 'http://localhost:8080/ipfs/'
 
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',  

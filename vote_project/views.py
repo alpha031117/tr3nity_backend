@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse
-from .models import Project, Vote, vote_history, Validator
+from .models import Vote, vote_history, Validator
+from grants_project.models import Project
 from datetime import datetime
 from rest_framework.decorators import api_view
 
@@ -66,34 +67,61 @@ def vote_project(request):
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
 
-# Get projects scoped by researcher
+# Get Validator's vote history
 @api_view(['GET'])
-def get_projects(request, reseacher_address):
-    projects = Project.objects.filter(user_address=reseacher_address)
-    data = []
-    for project in projects:
-        data.append({
-            'id': project.id,
-            'project_name': project.project_name,
-            'project_description': project.project_description,
-            'funded_amount': project.funded_amount,
-            'pub_date': project.pub_date,
-            'user_address': project.user_address
-        })
-    return JsonResponse({'status': 'success', 'data': data})
+def get_validator_vote_history(request, validator_address):
+    try:
+        # Check if validator exists
+        if not Validator.objects.filter(validator_address=validator_address).exists():
+            return JsonResponse({'status': 'error', 'message': 'Validator not found'})
+        
+        # Get the vote history for the validator
+        vote_history_list = vote_history.objects.filter(validator_address=validator_address)
+        
+        data = []
+        for vote in vote_history_list:
+            data.append({
+                'project_name': vote.project.name,
+                'vote_result': vote.vote_result,
+                'vote_date': vote.vote_date
+            })
+        
+        return JsonResponse({'status': 'success', 'data': data})
+    
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
 
-# Get all projects
+# Get Validator's vote count
 @api_view(['GET'])
-def get_all_projects(request):
-    projects = Project.objects.all()
-    data = []
-    for project in projects:
-        data.append({
-            'id': project.id,
-            'project_name': project.project_name,
-            'project_description': project.project_description,
-            'funded_amount': project.funded_amount,
-            'pub_date': project.pub_date,
-            'user_address': project.user_address
-        })
-    return JsonResponse({'status': 'success', 'data': data})
+def get_validator_vote_count(request, validator_address):
+    try:
+        # Check if validator exists
+        if not Validator.objects.filter(validator_address=validator_address).exists():
+            return JsonResponse({'status': 'error', 'message': 'Validator not found'})
+        
+        # Get the vote count for the validator
+        vote_count = vote_history.objects.filter(validator_address=validator_address).count()
+        
+        return JsonResponse({'status': 'success', 'data': vote_count})
+    
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+# Get Validator's reputation score
+@api_view(['GET'])
+def get_validator_reputation_score(request, validator_address):
+    try:
+        # Check if validator exists
+        if not Validator.objects.filter(validator_address=validator_address).exists():
+            return JsonResponse({'status': 'error', 'message': 'Validator not found'})
+        
+        # Get the reputation score for the validator
+        reputation_score = Validator.objects.get(validator_address=validator_address).reputation_score
+        
+        return JsonResponse({'status': 'success', 'data': reputation_score})
+    
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+    
+# # Calculate vote for project
+# def summary_vote():
