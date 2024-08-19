@@ -57,7 +57,7 @@ Open [http://localhost:8000](http://localhost:8000) with your browser to see the
 To learn more about Django, take a look at the following resources:
 - [Django Documentation](https://www.djangoproject.com/) - learn about Django features
 - [Django Rest Framework](https://www.django-rest-framework.org/) - learn abount Django Rest API
-- 
+
 ## Team
 1. [AlphaChong](https://github.com/alpha031117)
 2. [Doodledaron](https://github.com/doodledaron)
