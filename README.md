@@ -27,7 +27,7 @@ Voting system implemented in with [smart contract deployed](https://github.com/l
 ## Technologies Used
 - Frontend: Next.JS - [Seperate Repository](https://github.com/leonnloo/tr3nity-web)
 - Backend: [Django REST Framework](https://www.django-rest-framework.org/)
-- Blockchain: [Maschain]([https://docs.maschain.com/](https://www.maschain.com/))
+- Blockchain: [Maschain](https://www.maschain.com/)
 - Decentralized Storage: [IPFS](https://ipfs.tech/)
 
 ## How To Run
